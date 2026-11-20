@@ -10,12 +10,23 @@ Terraform for every AWS resource behind the CEDA Innovation Portal, plus the sha
 ```text
 Browser ──HTTPS──> CloudFront ──(Origin Access Control)──> S3 (private): front-end build
    │
-   └──HTTPS──> Application Load Balancer ──> ECS Fargate: backend-api ──> RDS PostgreSQL (private subnets)
+   └──HTTPS──> Application Load Balancer ──> ECS Fargate: backend-api :3001 ──> RDS PostgreSQL 17 (private subnets)
                                                     │
                                                     └──> S3: submission attachments, Secrets Manager: credentials
 
 GitHub Actions ──OIDC──> IAM deploy role per repository (no long-lived AWS keys)
 ```
+
+**Hosting decision pending.** The diagram shows the ECS Fargate option. The backend team's ADR 005 (to be migrated into `backend-api/docs/adr/`) recommends an AWS Free-plan option instead: an EC2 host with PostgreSQL either on the host or in private RDS, no load balancer and no NAT gateway, because a load balancer and NAT consume credits continuously. Settle this before writing modules. Whichever is chosen, the API contract is the same:
+
+| Item | Value |
+| --- | --- |
+| Container image | `Dockerfile` at the root of `backend-api`, Node.js 24 |
+| Port | `3001`, with `HOST=0.0.0.0` |
+| Health check | `GET /health/live` (liveness, no database). `GET /health/ready` also checks PostgreSQL |
+| Database | PostgreSQL 17 with TLS (`DATABASE_SSL=true` is required in production) |
+| Migrations | Run `prisma migrate deploy` as a separate step, never on container start |
+| Behind a proxy | Set `TRUST_PROXY` to the proxy's explicit IPs or CIDRs |
 
 Primary region: `af-south-1` (Cape Town), the closest region to Botswana. It is an opt-in region, so enable it on the account first. CloudFront certificates must be issued in `us-east-1`, which is why `providers.tf` defines a second provider alias.
 
