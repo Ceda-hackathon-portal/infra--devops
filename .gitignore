@@ -1,0 +1,28 @@
+# Terraform working files and state (state lives in S3, never in Git)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Environment-specific values (commit only the *.example files)
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+backend.hcl
+
+# Environment files and local tooling
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
