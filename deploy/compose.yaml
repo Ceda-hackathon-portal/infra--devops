@@ -1,0 +1,57 @@
+# CEDA Innovation Portal demo: one Hetzner server, one domain.
+# caddy is the only service that publishes ports. It terminates HTTPS and routes requests:
+#   /api/*      -> backend   (added once backend-api has code; see Caddyfile)
+#   everything  -> frontend  (static Vite build)
+#
+# Layout expected on the server (and on a laptop for a dress rehearsal):
+#   /srv/ceda/infra--devops/deploy/compose.yaml   <- this file
+#   /srv/ceda/front-end/                           <- front-end repository
+name: ceda
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp" # HTTP/3
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificates: never delete this volume, or Let's Encrypt rate limits bite
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks: [edge]
+
+  frontend:
+    build:
+      context: ./frontend
+      additional_contexts:
+        app: ${FRONTEND_DIR:-../../front-end}
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    image: ceda-frontend:local
+    restart: unless-stopped
+    # No published ports: only caddy reaches it, over the edge network.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks: [edge]
+
+networks:
+  edge:
+    # Fixed subnet so backend-api's TRUST_PROXY can name the proxy explicitly later.
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:

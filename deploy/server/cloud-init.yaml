@@ -1,0 +1,77 @@
+#cloud-config
+# Paste into Hetzner Console -> Add server -> "Cloud config" (Ubuntu 24.04).
+# BEFORE PASTING: replace the ssh-ed25519 line below with your own public key
+# (the contents of ~/.ssh/id_ed25519.pub). Also select that key in the console.
+#
+# What first boot does:
+#   - creates user "deploy" (SSH key only, passwordless sudo, docker group)
+#   - SSH: no root login, no passwords, only "deploy" may log in
+#   - ufw (22, 80, 443) as a second layer; the Hetzner Cloud Firewall is the real one,
+#     because ports published by Docker bypass ufw
+#   - Docker Engine + Compose plugin from Docker's apt repository, with log rotation
+#   - 2 GB swap so image builds survive on a 4 GB server
+#   - unattended security upgrades, fail2ban for SSH
+# Check it finished:  ssh deploy@<IP> 'cloud-init status --wait; cat /var/lib/cloud/ceda-ready'
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+
+users:
+  - name: deploy
+    groups: [sudo]
+    shell: /bin/bash
+    lock_passwd: true
+    # The account has no password, so sudo cannot ask for one. Acceptable for a short-lived
+    # demo box; the SSH key is what protects it.
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY ceda-deploy
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-ceda-hardening.conf
+    permissions: "0644"
+    content: |
+      # First value wins in sshd_config.d, so this file (10-) overrides 50-cloud-init.conf.
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+      AllowUsers deploy
+      MaxAuthTries 3
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      { "log-driver": "local", "log-opts": { "max-size": "10m", "max-file": "3" } }
+
+runcmd:
+  # Swap
+  - [sh, -c, "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab"]
+  # Docker Engine from Docker's own repository
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - [sh, -c, 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list']
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker deploy
+  - systemctl enable --now docker
+  # Firewall (second layer)
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow OpenSSH
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 443/udp
+  - ufw --force enable
+  # App folder
+  - install -d -o deploy -g deploy /srv/ceda
+  # Apply the SSH hardening last, once the deploy user and its key exist
+  - systemctl restart ssh
+  - [sh, -c, "date -Is > /var/lib/cloud/ceda-ready"]

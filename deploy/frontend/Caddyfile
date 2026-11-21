@@ -1,0 +1,27 @@
+# Internal static file server for the single-page app. Reached only by the edge caddy.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	root * /srv
+
+	# Vite puts content-hashed files in /assets, so they can be cached forever.
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@images path /images/*
+	header @images Cache-Control "public, max-age=86400"
+	@page not path /assets/* /images/*
+	header @page Cache-Control "no-cache"
+
+	# Client-side routes such as /admin/reviews fall back to index.html, so a refresh or deep link works.
+	# Missing files under /assets and /images still return 404 instead of HTML.
+	handle @page {
+		try_files {path} /index.html
+		file_server
+	}
+	handle {
+		file_server
+	}
+}
