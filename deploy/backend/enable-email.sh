@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Turns on applicant email for the demo backend. Run on the server as deploy:
 #   bash enable-email.sh <image-tag> <frontend-origin>
+# Uses port 587 (STARTTLS): Hetzner blocks outgoing 25 and 465 on new accounts.
 # Expects ops/staging/private/smtp.env (SMTP_USER, SMTP_PASS, MAIL_REDIRECT_TO), copied by the operator.
 # No value from smtp.env is ever printed. The file is deleted once merged into api.env.
 set -euo pipefail
@@ -27,7 +28,7 @@ for k in ("SMTP_USER", "MAIL_REDIRECT_TO"):
 pw = re.sub(r"\s+", "", vals["SMTP_PASS"])
 if len(pw) != 16: print("warning: SMTP_PASS is not 16 characters; Gmail App Passwords are 16 letters")
 new = {
-    "SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "465", "SMTP_USER": vals["SMTP_USER"], "SMTP_PASS": pw,
+    "SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "587", "SMTP_USER": vals["SMTP_USER"], "SMTP_PASS": pw,
     "MAIL_FROM": f"CEDA Innovation Portal <{vals['SMTP_USER']}>", "MAIL_REDIRECT_TO": vals["MAIL_REDIRECT_TO"],
     "MAIL_LINK_ORIGIN": origin,
 }
@@ -44,7 +45,7 @@ echo "compose warnings: $(dc config 2>&1 >/dev/null </dev/null | grep -c 'not se
 echo "== test email (sent once, to MAIL_REDIRECT_TO)"
 docker run --rm --env-file <(grep -E '^(SMTP_|MAIL_)' "$P/api.env" | sed 's/\$\$/$/g') "ceda-backend:$TAG" node --input-type=module -e "
 import nodemailer from 'nodemailer';
-const t = nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT), secure: true,
+const t = nodemailer.createTransport({ host: process.env.SMTP_HOST, port: 587, secure: false, requireTLS: true,
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
 try { await t.verify(); await t.sendMail({ from: process.env.MAIL_FROM, to: process.env.MAIL_REDIRECT_TO,
   subject: 'CEDA portal: email is working', text: 'This test confirms the CEDA Innovation Portal can send applicant emails.' });
