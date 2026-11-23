@@ -1,0 +1,12 @@
+# Backend edge for the hackathon demo. The browser never calls this host directly:
+# Vercel forwards https://<frontend>/api/* here, so the API sees the frontend as its origin.
+{
+	admin off
+}
+
+{$API_HOST} {
+	encode zstd gzip
+	header -Server
+	reverse_proxy api:3001
+	log
+}

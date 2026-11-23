@@ -1,0 +1,17 @@
+# Override for Back-end/backend/ops/staging/compose.yml on the demo server.
+# Use: docker compose --env-file ops/staging/private/compose.env -f ops/staging/compose.yml \
+#        -f /srv/ceda/infra--devops/deploy/backend/compose.demo.yml <command>
+services:
+  api:
+    environment:
+      AUTH_LOCAL_ACCOUNTS_FILE: /run/auth/accounts.json
+      APPLICATION_STORAGE_DIR: /data/application-files
+    volumes:
+      - ./private/accounts.json:/run/auth/accounts.json:ro
+      - application_files:/data
+  proxy:
+    volumes:
+      - /srv/ceda/infra--devops/deploy/backend/Caddyfile:/etc/caddy/Caddyfile:ro
+
+volumes:
+  application_files:
