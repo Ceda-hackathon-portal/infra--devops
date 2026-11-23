@@ -25,9 +25,9 @@ echo "== grants for new tables"
 # runtime-role.sql cannot be re-run whole (it starts with CREATE ROLE), so apply the grants added after the first setup.
 dc exec -T --user postgres postgres psql -v ON_ERROR_STOP=1 -q -d ceda_staging \
   -c "GRANT SELECT, INSERT ON applicant_credentials, registration_codes TO ceda_runtime;" \
-  -c "GRANT UPDATE(attempts, consumed_at) ON registration_codes TO ceda_runtime;" </dev/null
+  -c "GRANT UPDATE(attempts, consumed_at) ON registration_codes TO ceda_runtime;"   -c "GRANT SELECT, INSERT ON application_privacy_consents TO ceda_runtime;" </dev/null
 dc exec -T --user postgres postgres psql -tA -d ceda_staging </dev/null \
-  -c "select table_name||': '||string_agg(privilege_type, ',' order by privilege_type) from information_schema.role_table_grants where grantee='ceda_runtime' and table_name in ('applicant_credentials','registration_codes') group by table_name"
+  -c "select table_name||': '||string_agg(privilege_type, ',' order by privilege_type) from information_schema.role_table_grants where grantee='ceda_runtime' and table_name in ('applicant_credentials','registration_codes','application_privacy_consents') group by table_name"
 
 echo "== restart api"
 dc up -d --wait --force-recreate api </dev/null 2>&1 | tail -1
