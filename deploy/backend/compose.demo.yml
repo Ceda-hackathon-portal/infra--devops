@@ -9,6 +9,10 @@ services:
     volumes:
       - ./private/accounts.json:/run/auth/accounts.json:ro
       - application_files:/data
+    # Fixed address so the api can never take 172.29.67.2, which is reserved for the proxy (TRUST_PROXY).
+    networks:
+      edge: {ipv4_address: 172.29.67.3}
+      database: {}
   proxy:
     volumes:
       - /srv/ceda/infra--devops/deploy/backend/Caddyfile:/etc/caddy/Caddyfile:ro
